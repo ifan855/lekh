@@ -85,9 +85,15 @@ export async function ensureProfile(
   const base = (data.name || data.email?.split("@")[0] || "reader").toLowerCase().replace(/[^a-z0-9_]/g, "");
   let username = base || "reader";
   let attempt = 1;
-  while (
-    await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.username, username)).limit(1)
-  ) {
+  // NOTE: an empty array is truthy in JS — the loop condition must check .length,
+  // otherwise this spins forever and every signed-in request times out.
+  for (let guard = 0; guard < 50; guard += 1) {
+    const taken = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(eq(profiles.username, username))
+      .limit(1);
+    if (taken.length === 0) break;
     attempt += 1;
     username = `${base || "reader"}${attempt}`;
   }
