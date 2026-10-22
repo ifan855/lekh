@@ -1,0 +1,63 @@
+{
+  "name": "lekh",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @lekh/web",
+    "build": "npm run build --workspace @lekh/web && npm run build --workspace @lekh/mcp",
+    "build:web": "npm run build --workspace @lekh/web",
+    "build:mcp": "npm run build --workspace @lekh/mcp",
+    "lint": "npm run lint --workspace @lekh/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace @lekh/db",
+    "db:migrate": "npm run db:migrate --workspace @lekh/db",
+    "db:push": "npm run db:push --workspace @lekh/db"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "drizzle-orm": "0.38.4",
+    "@tiptap/core": "2.27.3",
+    "@tiptap/pm": "2.27.3",
+    "@tiptap/react": "2.27.3",
+    "@tiptap/starter-kit": "2.27.3",
+    "@tiptap/extension-underline": "2.27.3",
+    "@tiptap/extension-highlight": "2.27.3",
+    "@tiptap/extension-link": "2.27.3",
+    "@tiptap/extension-placeholder": "2.27.3",
+    "@tiptap/extension-character-count": "2.27.3",
+    "@tiptap/extension-image": "2.27.3",
+    "@tiptap/extension-horizontal-rule": "2.27.3",
+    "@tiptap/extension-blockquote": "2.27.3",
+    "@tiptap/extension-bold": "2.27.3",
+    "@tiptap/extension-bullet-list": "2.27.3",
+    "@tiptap/extension-code": "2.27.3",
+    "@tiptap/extension-code-block": "2.27.3",
+    "@tiptap/extension-document": "2.27.3",
+    "@tiptap/extension-dropcursor": "2.27.3",
+    "@tiptap/extension-gapcursor": "2.27.3",
+    "@tiptap/extension-hard-break": "2.27.3",
+    "@tiptap/extension-heading": "2.27.3",
+    "@tiptap/extension-history": "2.27.3",
+    "@tiptap/extension-italic": "2.27.3",
+    "@tiptap/extension-list-item": "2.27.3",
+    "@tiptap/extension-ordered-list": "2.27.3",
+    "@tiptap/extension-paragraph": "2.27.3",
+    "@tiptap/extension-strike": "2.27.3",
+    "@tiptap/extension-text": "2.27.3",
+    "@tiptap/extension-text-style": "2.27.3",
+    "@tiptap/extension-bubble-menu": "2.27.3",
+    "@tiptap/extension-floating-menu": "2.27.3"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.38.4"
+  }
+}
