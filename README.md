@@ -106,7 +106,14 @@ npm run dev --workspace @lekh/mcp
 | `ADMIN_EMAILS` | comma-separated emails that get the admin role on first sign-in |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | optional: bring your own email provider |
 
-## Deployment
+## Deployment (current)
+
+| Piece | Where |
+| --- | --- |
+| Web app | https://lekh-9rcw.netlify.app (Netlify, repo root + `apps/web` base) |
+| MCP server | https://br-bitter-math-b46cponh-lekhmcp.compute.c-6.us-east-2.aws.neon.tech/mcp (Neon Function `lekhmcp`) |
+| Database / auth / storage | Neon project `lekh` (`noisy-paper-34184978`), branch `main` |
+| Repository | https://github.com/ifan855/lekh |
 
 ### Web app (Netlify)
 
@@ -114,9 +121,12 @@ npm run dev --workspace @lekh/mcp
 the Netlify UI (or via the API) and deploy.
 
 To get automatic deploys on every push, connect the repository in Netlify
-(**Site settings → Git → Connect to GitHub**) — or add the
+(**Site settings → Git → Connect to GitHub**) — this is the one step that still needs a human,
+because it authorises the Netlify GitHub app on your account. Alternatively add the
 `.github/workflows/deploy.yml` workflow with `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`
-secrets.
+repository secrets.
+
+Site id: `b3580380-5beb-4919-8d46-27d9643fafda`.
 
 ### MCP server (Neon Functions)
 
