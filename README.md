@@ -104,7 +104,7 @@ npm run dev --workspace @lekh/mcp
 | `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Neon Object Storage |
 | `NEXT_PUBLIC_APP_URL` | public URL of the web app |
 | `ADMIN_EMAILS` | comma-separated emails that get the admin role on first sign-in |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | optional: bring your own email provider |
+
 
 ## Deployment (current)
 
@@ -141,9 +141,22 @@ Neon injects `DATABASE_URL` automatically. The public URL looks like
 
 ### Email delivery
 
-Neon Auth sends the one-time codes. For real delivery, point the Better Auth email
-provider at Resend (Project → Better Auth → Email provider), or set `RESEND_API_KEY`
-and `RESEND_FROM_EMAIL` and swap in a custom sender.
+One-time codes are sent by **Neon Auth**, not by lekh. The SMTP provider lives in the Neon
+branch's configuration, so the web app's environment stays free of email secrets.
+
+**Admin → Settings → Email delivery** writes that configuration into Neon through the Neon
+API (`NEON_API_KEY`, `NEON_PROJECT_ID`, `NEON_BRANCH_ID` are the only requirements). Pick a
+mailbox, paste the credentials, press *Save*, then *Send test*.
+
+For Gmail: enable 2-Step Verification, create an
+[app password](https://myaccount.google.com/apppasswords) (16 characters, no spaces) and use
+`smtp.gmail.com:587` with your full Gmail address as the username. Any other SMTP server
+works too (Outlook, Yahoo, Resend, SES) — host, port, username and password are all
+configurable from the same panel.
+
+If you prefer the console: **Project → Better Auth → Email provider** shows the same
+settings, and `neon neon-auth config email-provider update --type standard --host … --port …
+--username … --password … --sender-email …` does the same from the terminal.
 
 ### Making yourself admin
 

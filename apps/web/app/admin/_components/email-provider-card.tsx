@@ -2,22 +2,23 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Copy, Mail, RefreshCw, Send } from "lucide-react";
+import { Info, Mail, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-type ResendDomain = {
-  id: string;
-  name: string;
-  status: string;
-  region?: string;
-  records?: { type: string; name: string; value: string; status?: string; priority?: number }[];
-};
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ProviderState = {
+  configured?: boolean;
+  message?: string | null;
   provider?: {
     type?: string;
     host?: string;
@@ -26,29 +27,30 @@ type ProviderState = {
     sender_email?: string;
     sender_name?: string;
   } | null;
-  providerError?: string | null;
-  domains?: ResendDomain[];
-  resendError?: string | null;
-  resendFrom?: string | null;
 };
 
-const STATUS_COPY: Record<string, { label: string; tone: string }> = {
-  verified: { label: "Verified — ready to send", tone: "text-primary" },
-  pending: { label: "Waiting for DNS to propagate", tone: "text-amber-600" },
-  not_started: { label: "DNS records not added yet", tone: "text-amber-600" },
-  failure: { label: "Verification failed — check the records", tone: "text-destructive" },
-};
+const PRESETS = [
+  { id: "gmail", label: "Gmail", host: "smtp.gmail.com", port: 587 },
+  { id: "outlook", label: "Outlook / Microsoft 365", host: "smtp.office365.com", port: 587 },
+  { id: "yahoo", label: "Yahoo Mail", host: "smtp.mail.yahoo.com", port: 587 },
+  { id: "custom", label: "Other (SMTP)", host: "", port: 587 },
+];
 
 /**
- * Email delivery (Resend).
+ * Email delivery.
  *
- * lekh does not send the codes itself — Neon Auth does, through an SMTP
- * provider configured on the Neon branch. This panel points that provider at
- * Resend and shows which sending domains are ready.
+ * lekh never sends mail itself — Neon Auth sends the one-time codes through
+ * the SMTP provider configured on the Neon branch. This panel writes that
+ * configuration straight into Neon, so nothing about email lives in the web
+ * app's own environment.
  */
 export function EmailProviderCard() {
   const [state, setState] = useState<ProviderState | null>(null);
-  const [apiKey, setApiKey] = useState("");
+  const [preset, setPreset] = useState("gmail");
+  const [host, setHost] = useState("smtp.gmail.com");
+  const [port, setPort] = useState("587");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
   const [senderName, setSenderName] = useState("lekh");
   const [recipient, setRecipient] = useState("");
@@ -60,15 +62,29 @@ export function EmailProviderCard() {
       if (!res.ok) return;
       const body = (await res.json()) as ProviderState;
       setState(body);
-      if (body.provider?.sender_email && !senderEmail) setSenderEmail(body.provider.sender_email);
+      if (body.provider) {
+        if (body.provider.host) setHost(body.provider.host);
+        if (body.provider.port) setPort(String(body.provider.port));
+        if (body.provider.username) setUsername(body.provider.username);
+        if (body.provider.sender_email) setSenderEmail(body.provider.sender_email);
+      }
     } catch {
       /* ignore */
     }
-  }, [senderEmail]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const applyPreset = (id: string) => {
+    setPreset(id);
+    const found = PRESETS.find((p) => p.id === id);
+    if (found && found.host) {
+      setHost(found.host);
+      setPort(String(found.port));
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -76,12 +92,19 @@ export function EmailProviderCard() {
       const res = await fetch("/api/admin/email-provider", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ resendApiKey: apiKey, senderEmail, senderName }),
+        body: JSON.stringify({
+          smtpHost: host,
+          smtpPort: Number(port),
+          username,
+          password,
+          senderEmail: senderEmail || username,
+          senderName,
+        }),
       });
       const body = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? "Could not save the email provider");
-      toast.success("Email provider updated — one-time codes will be sent by Resend");
-      setApiKey("");
+      toast.success("Email provider updated — one-time codes will be sent through this mailbox");
+      setPassword("");
       void load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the email provider");
@@ -112,80 +135,94 @@ export function EmailProviderCard() {
     }
   };
 
-  const verifyDomain = async (domainId: string) => {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/admin/email-provider", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ domainId }),
-      });
-      const body = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(body.error ?? "Verification failed");
-      toast.success("Resend is re-checking the records — give DNS a few minutes");
-      void load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Verification failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const copy = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success("Copied");
-    } catch {
-      toast.error("Could not copy to the clipboard");
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Mail className="h-4 w-4" />
-          Email delivery (Resend)
+          Email delivery
         </CardTitle>
         <CardDescription>
-          One-time codes are delivered by Neon Auth through an SMTP provider. Point it at Resend so
-          codes come from your own domain.
+          One-time codes are sent by Neon Auth through an SMTP provider. Configure the mailbox here
+          and the credentials are stored in Neon — never in the web app&apos;s environment.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-5">
-        {state?.providerError && (
+      <CardContent className="space-y-4">
+        {state?.message && (
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-            {state.providerError}
+            {state.message}
           </p>
         )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="resend-key">Resend API key</Label>
-          <Input
-            id="resend-key"
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="re_…"
-            autoComplete="off"
-          />
-        </div>
+        {state?.provider?.host && (
+          <p className="text-xs text-muted-foreground">
+            Currently sending from <span className="text-foreground">{state.provider.sender_email}</span>{" "}
+            via {state.provider.host}:{state.provider.port}.
+          </p>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="sender-email">Sender address</Label>
-            <Input
-              id="sender-email"
-              type="email"
-              value={senderEmail}
-              onChange={(event) => setSenderEmail(event.target.value)}
-              placeholder="lekh@yourdomain.com"
-            />
-            <p className="text-xs text-muted-foreground">
-              Must belong to a domain Resend has verified.
-            </p>
+            <Label>Mailbox</Label>
+            <Select value={preset} onValueChange={applyPreset}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRESETS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-host">SMTP host</Label>
+            <Input
+              id="smtp-host"
+              value={host}
+              onChange={(event) => setHost(event.target.value)}
+              placeholder="smtp.gmail.com"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-port">Port</Label>
+            <Input
+              id="smtp-port"
+              value={port}
+              onChange={(event) => setPort(event.target.value.replace(/\D/g, "").slice(0, 5))}
+              inputMode="numeric"
+              placeholder="587"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-user">Username</Label>
+            <Input
+              id="smtp-user"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="you@gmail.com"
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="smtp-pass">App password</Label>
+            <Input
+              id="smtp-pass"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="16-character app password"
+              autoComplete="new-password"
+            />
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="sender-name">Sender name</Label>
             <Input
@@ -197,7 +234,35 @@ export function EmailProviderCard() {
           </div>
         </div>
 
-        <Button onClick={save} disabled={busy || !apiKey || !senderEmail}>
+        <div className="space-y-1.5">
+          <Label htmlFor="sender-email">Sender address</Label>
+          <Input
+            id="sender-email"
+            type="email"
+            value={senderEmail}
+            onChange={(event) => setSenderEmail(event.target.value)}
+            placeholder="you@gmail.com"
+          />
+        </div>
+
+        <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            For Gmail: turn on 2-Step Verification, then create an{" "}
+            <a
+              className="underline"
+              href="https://myaccount.google.com/apppasswords"
+              target="_blank"
+              rel="noreferrer"
+            >
+              app password
+            </a>{" "}
+            (16 characters, no spaces). Your normal Google password will not work. Port 587 uses
+            STARTTLS; switch to 465 only if 587 is blocked.
+          </span>
+        </div>
+
+        <Button onClick={save} disabled={busy || !host || !username || !password || !senderEmail}>
           {busy ? "Saving…" : "Save email provider"}
         </Button>
 
@@ -217,84 +282,6 @@ export function EmailProviderCard() {
             Send test
           </Button>
         </div>
-
-        {state && state.domains && state.domains.length > 0 && (
-          <div className="space-y-3 border-t pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Resend sending domains</p>
-              <Button variant="ghost" size="xs" onClick={load} disabled={busy}>
-                <RefreshCw className="h-3.5 w-3.5" />
-                Refresh
-              </Button>
-            </div>
-
-            {state.domains.map((domain) => {
-              const status = STATUS_COPY[domain.status] ?? {
-                label: domain.status,
-                tone: "text-muted-foreground",
-              };
-              const ready = domain.status === "verified";
-              return (
-                <div key={domain.id} className="rounded-lg border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{domain.name}</span>
-                    <span className={`text-xs ${status.tone}`}>
-                      {ready ? (
-                        <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
-                      ) : (
-                        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                      )}
-                      {status.label}
-                    </span>
-                    {!ready && (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        className="ml-auto"
-                        disabled={busy}
-                        onClick={() => verifyDomain(domain.id)}
-                      >
-                        Check records
-                      </Button>
-                    )}
-                  </div>
-
-                  {!ready && domain.records && domain.records.length > 0 && (
-                    <ul className="mt-3 space-y-2">
-                      {domain.records.map((record) => (
-                        <li key={`${record.type}-${record.name}`} className="text-xs">
-                          <span className="font-medium">{record.type}</span>{" "}
-                          <span className="text-muted-foreground">
-                            {record.name} → {record.value}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Copy record"
-                            onClick={() => copy(`${record.name} ${record.value}`)}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-
-            <p className="text-xs text-muted-foreground">
-              Add these DNS records at your domain registrar, then press “Check records”. Until a
-              domain is verified, Resend only delivers to the account owner&apos;s own address.
-            </p>
-          </div>
-        )}
-
-        {state?.resendError && (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-            {state.resendError}
-          </p>
-        )}
       </CardContent>
     </Card>
   );

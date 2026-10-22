@@ -6,34 +6,20 @@ import { getAdminViewer } from "@/app/admin/_lib/server";
 export const dynamic = "force-dynamic";
 
 /**
- * Email delivery for Neon Auth (Resend over SMTP).
+ * Email delivery for Neon Auth.
  *
- * Neon Auth sends the one-time codes, so the sender is configured on the Neon
- * branch rather than in lekh itself. This route is a thin, admin-only wrapper
- * around the Neon API and the Resend API:
+ * lekh never sends mail itself: Neon Auth sends the one-time codes through the
+ * SMTP provider configured on the Neon branch. This route is a thin, admin-only
+ * wrapper around the Neon API:
  *
- *   PATCH /api/v2/projects/{project}/branches/{branch}/auth/email_provider
- *   GET|POST https://api.resend.com/domains
+ *   GET|PATCH /api/v2/projects/{project}/branches/{branch}/auth/email_provider
+ *   POST      /api/v2/projects/{project}/branches/{branch}/auth/send_test_email
+ *
+ * The password never touches lekh's own environment — it goes straight from
+ * this request into Neon's configuration.
  */
 
 const NEON_API = "https://console.neon.tech/api/v2";
-const RESEND_API = "https://api.resend.com";
-
-type ResendRecord = {
-  type: string;
-  name: string;
-  value: string;
-  status?: string;
-  priority?: number;
-};
-
-type ResendDomain = {
-  id: string;
-  name: string;
-  status: string;
-  region?: string;
-  records?: ResendRecord[];
-};
 
 function neonConfig() {
   const apiKey = process.env.NEON_API_KEY;
@@ -47,58 +33,43 @@ function neonUrl(config: { projectId: string; branchId: string }, path: string):
   return `${NEON_API}/projects/${config.projectId}/branches/${config.branchId}/auth${path}`;
 }
 
-async function listResendDomains(): Promise<{ domains: ResendDomain[]; error?: string }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { domains: [], error: "RESEND_API_KEY is not set." };
-
-  const res = await fetch(`${RESEND_API}/domains`, {
-    headers: { authorization: `Bearer ${apiKey}` },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return { domains: [], error: body?.message ?? "Could not reach Resend." };
-  }
-  return { domains: (body?.data ?? []) as ResendDomain[] };
-}
-
-/** Current provider + sending domains. */
+/** Current SMTP provider. */
 export async function GET() {
   const viewer = await getAdminViewer();
   if (!viewer) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const config = neonConfig();
-  let provider: unknown = null;
-  let providerError: string | null = null;
-
   if (!config) {
-    providerError =
-      "Set NEON_API_KEY, NEON_PROJECT_ID and NEON_BRANCH_ID to manage email delivery from lekh.";
-  } else {
-    const res = await fetch(neonUrl(config, "/email_provider"), {
-      headers: { authorization: `Bearer ${config.apiKey}` },
+    return NextResponse.json({
+      configured: false,
+      provider: null,
+      message:
+        "Set NEON_API_KEY, NEON_PROJECT_ID and NEON_BRANCH_ID to manage email delivery from lekh.",
     });
-    provider = await res.json().catch(() => null);
-    if (!res.ok) providerError = "Could not read the Neon email provider configuration.";
   }
 
-  const { domains, error } = await listResendDomains();
+  const res = await fetch(neonUrl(config, "/email_provider"), {
+    headers: { authorization: `Bearer ${config.apiKey}` },
+  });
+  const body = await res.json().catch(() => null);
 
   return NextResponse.json({
-    provider,
-    providerError,
-    domains,
-    resendError: error ?? null,
-    resendFrom: process.env.RESEND_FROM_EMAIL ?? null,
+    configured: true,
+    provider: body,
+    message: res.ok ? null : "Could not read the Neon email provider configuration.",
   });
 }
 
 const patchSchema = z.object({
-  resendApiKey: z.string().trim().min(8),
+  smtpHost: z.string().trim().min(3).max(200),
+  smtpPort: z.number().int().min(1).max(65535),
+  username: z.string().trim().min(1).max(200),
+  password: z.string().min(4).max(400),
   senderEmail: z.string().trim().email(),
   senderName: z.string().trim().min(1).max(120).optional(),
 });
 
-/** Point the Neon branch's SMTP provider at Resend. */
+/** Point the Neon branch's SMTP provider at a mailbox (Gmail, Resend, SES…). */
 export async function PATCH(request: Request) {
   const viewer = await getAdminViewer();
   if (!viewer) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -114,11 +85,11 @@ export async function PATCH(request: Request) {
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "A Resend API key and a verified sender address are required." },
+      { error: "Host, port, user, password and a sender address are required." },
       { status: 400 },
     );
   }
-  const { resendApiKey, senderEmail, senderName } = parsed.data;
+  const { smtpHost, smtpPort, username, password, senderEmail, senderName } = parsed.data;
 
   const res = await fetch(neonUrl(config, "/email_provider"), {
     method: "PATCH",
@@ -128,10 +99,10 @@ export async function PATCH(request: Request) {
     },
     body: JSON.stringify({
       type: "standard",
-      host: "smtp.resend.com",
-      port: 587,
-      username: "resend",
-      password: resendApiKey,
+      host: smtpHost,
+      port: smtpPort,
+      username,
+      password,
       sender_email: senderEmail,
       sender_name: senderName || "lekh",
     }),
@@ -145,30 +116,6 @@ export async function PATCH(request: Request) {
     );
   }
   return NextResponse.json({ ok: true, provider: body });
-}
-
-const verifySchema = z.object({ domainId: z.string().min(1) });
-
-/** Ask Resend to re-check the DNS records of a domain. */
-export async function PUT(request: Request) {
-  const viewer = await getAdminViewer();
-  if (!viewer) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "RESEND_API_KEY is not set." }, { status: 400 });
-
-  const parsed = verifySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "A domain id is required." }, { status: 400 });
-
-  const res = await fetch(`${RESEND_API}/domains/${parsed.data.domainId}/verify`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}` },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json({ error: body?.message ?? "Verification failed" }, { status: res.status });
-  }
-  return NextResponse.json({ ok: true, domain: body });
 }
 
 const testSchema = z.object({ recipientEmail: z.string().trim().email() });
