@@ -204,7 +204,7 @@ export default async function ExplorePage() {
           language chips to filter results, and the language badge on a cover to spot a story in
           your own language.
         </p>
-        <p className="text-xs">© {new Date().getFullYear()} lekh</p>
+        <p className="text-xs">© {new Date().getFullYear()} lekh · v0.1.1</p>
       </footer>
     </div>
   );
