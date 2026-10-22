@@ -120,11 +120,9 @@ npm run dev --workspace @lekh/mcp
 `netlify.toml` sets the base directory to `apps/web`. Add the environment variables in
 the Netlify UI (or via the API) and deploy.
 
-To get automatic deploys on every push, connect the repository in Netlify
-(**Site settings → Git → Connect to GitHub**) — this is the one step that still needs a human,
-because it authorises the Netlify GitHub app on your account. Alternatively add the
-`.github/workflows/deploy.yml` workflow with `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`
-repository secrets.
+The repository is connected to Netlify through the Netlify GitHub app, so **every push to
+`main` builds and deploys automatically** — no tokens, no workflow file, nothing to run by
+hand.
 
 Site id: `b3580380-5beb-4919-8d46-27d9643fafda`.
 
