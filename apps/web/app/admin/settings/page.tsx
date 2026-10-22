@@ -1,5 +1,6 @@
 import { getSettings } from "@lekh/core";
 
+import { EmailProviderCard } from "@/app/admin/_components/email-provider-card";
 import { SettingsForm, type SettingsPayload } from "@/app/admin/_components/settings-form";
 import { Forbidden } from "@/app/admin/_components/forbidden";
 import { getAdminViewer } from "@/app/admin/_lib/server";
@@ -55,6 +56,7 @@ export default async function AdminSettingsPage() {
   return (
     <div className="space-y-4">
       <SettingsForm initial={payload} />
+      <EmailProviderCard />
       <p className="text-xs text-muted-foreground">
         Settings are stored in the <code>admin_settings</code> table and read on demand by the site.
         Changing them takes effect immediately — no redeploy needed.
