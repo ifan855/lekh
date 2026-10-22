@@ -155,3 +155,5 @@ login. After that, the admin panel can promote anyone.
 ## Licence
 
 MIT.
+
+<!-- deploy check -->
