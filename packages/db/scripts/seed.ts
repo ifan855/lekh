@@ -27,6 +27,18 @@ function para(text: string, marks?: InlineNode["marks"]): BlockNode {
   };
 }
 
+function rich(segments: { text: string; marks?: InlineNode["marks"] }[]): BlockNode {
+  return {
+    type: "paragraph",
+    attrs: { id: id() },
+    content: segments.map((segment) => ({
+      type: "text" as const,
+      text: segment.text,
+      ...(segment.marks ? { marks: segment.marks } : {}),
+    })),
+  };
+}
+
 function heading(text: string, level: 1 | 2 | 3 = 2): BlockNode {
   return { type: "heading", attrs: { id: id(), level }, content: [{ type: "text", text }] };
 }
@@ -98,16 +110,21 @@ const STORIES: SeedStory[] = [
           {
             title: "What the mayor wanted",
             blocks: [
-              para(
-                "The mayor's office sent a woman named Senn with a leather satchel and no smile. *We do not pay for maps*, Senn said. *We pay for the streets.*",
-              ),
+              rich([
+                { text: "The mayor's office sent a woman named Senn with a leather satchel and no smile. " },
+                { text: "We do not pay for maps", marks: [{ type: "italic" }] },
+                { text: ", Senn said. " },
+                { text: "We pay for the streets.", marks: [{ type: "italic" }] },
+              ]),
               para(
                 "Mara tried to explain that the two had become the same thing. Senn listened the way people listen to weather reports: politely, and without intention.",
               ),
               heading("The contract"),
-              para(
-                "Three days. Three thousand citizens. One map at a scale nobody had attempted since the river moved. If Mara failed, the city would keep its missing streets — and the Mayor would keep the missing street's *deaths*.",
-              ),
+              rich([
+                { text: "Three days. Three thousand citizens. One map at a scale nobody had attempted since the river moved. If Mara failed, the city would keep its missing streets — and the Mayor would keep the missing street's " },
+                { text: "deaths", marks: [{ type: "bold" }] },
+                { text: "." },
+              ]),
               para(
                 "There were nine names in the ledger Senn left behind. Nine people who had walked into erased roads and never come out. Mara read them twice, and then she sharpened her pencils.",
               ),

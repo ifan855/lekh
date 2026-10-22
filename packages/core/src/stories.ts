@@ -190,19 +190,22 @@ export async function relatedStories(storyId: string, limit = 12): Promise<Story
   const current = await db.select().from(stories).where(eq(stories.id, storyId)).limit(1);
   const story = current[0];
   if (!story) return [];
-  return db
+
+  const tags = new Set(story.tags ?? []);
+  if (tags.size === 0) return [];
+
+  // Small community: filter tag overlap in JS rather than fighting array operators.
+  const candidates = await db
     .select(cardColumns)
     .from(stories)
     .innerJoin(profiles, eq(profiles.id, stories.authorId))
-    .where(
-      and(
-        publishedPublic,
-        sql`${stories.id} <> ${storyId}`,
-        sql`exists (select 1 from unnest(${stories.tags}) t where t = any(${story.tags}))`,
-      ),
-    )
+    .where(and(publishedPublic, sql`${stories.id} <> ${storyId}`))
     .orderBy(desc(stories.readCount))
-    .limit(limit);
+    .limit(300);
+
+  return candidates
+    .filter((row) => (row.tags ?? []).some((tag) => tags.has(tag)))
+    .slice(0, limit);
 }
 
 export async function getStoryBundle(storyId: string) {
