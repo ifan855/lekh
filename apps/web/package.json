@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lekh/core": "*",
-    "@lekh/db": "*",
+    "@lekh/core": "file:../../packages/core",
+    "@lekh/db": "file:../../packages/db",
     "@neondatabase/auth": "^0.7.0-beta",
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",

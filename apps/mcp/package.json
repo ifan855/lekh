@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@lekh/core": "*",
-    "@lekh/db": "*",
+    "@lekh/core": "file:../../packages/core",
+    "@lekh/db": "file:../../packages/db",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "hono": "^4.6.14",
     "jose": "^5.9.6",

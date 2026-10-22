@@ -92,12 +92,20 @@ export async function ensureProfile(
     username = `${base || "reader"}${attempt}`;
   }
 
+  const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  const isAdmin =
+    adminEmails.length > 0 && adminEmails.includes((data.email ?? "").trim().toLowerCase());
+
   const inserted = await db
     .insert(profiles)
     .values({
       id: userId,
       username,
       displayName: data.name || base || "Reader",
+      role: isAdmin ? "admin" : "user",
     })
     .returning();
   return inserted[0];
